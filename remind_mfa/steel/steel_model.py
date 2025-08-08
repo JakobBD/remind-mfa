@@ -9,6 +9,7 @@ from remind_mfa.common.data_transformations import Bound, BoundList
 from remind_mfa.common.stock_extrapolation import StockExtrapolation
 from remind_mfa.common.custom_data_reader import CustomDataReader
 from remind_mfa.common.trade import TradeSet
+from remind_mfa.common.trade_extrapolation import CommonProcess
 from remind_mfa.steel.steel_export import SteelDataExporter
 from remind_mfa.steel.steel_mfa_system_future import SteelMFASystem
 from remind_mfa.steel.steel_mfa_system_historic import SteelMFASystemHistoric
@@ -23,8 +24,8 @@ class SteelModel:
         self.cfg = cfg
 
     def run(self):
-        stock_driven = self.cfg.customization.mode == "stock_driven"
-        self.definition_future = get_definition(self.cfg, historic=False, stock_driven=stock_driven)
+        from_historic = self.cfg.customization.mode == "from_historic"
+        self.definition_future = get_definition(self.cfg, historic=False, from_historic=from_historic)
         self.read_data(self.definition_future)
         self.modify_parameters()
         self.data_writer = SteelDataExporter(
@@ -32,8 +33,9 @@ class SteelModel:
             do_export=self.cfg.do_export,
             output_path=self.cfg.output_path,
         )
-        if stock_driven:
-            self.definition_historic = get_definition(self.cfg, historic=True, stock_driven=False)
+        self.future_mfa = self.make_mfa(historic=False, mode=self.cfg.customization.mode)
+        if from_historic:
+            self.definition_historic = get_definition(self.cfg, historic=True, from_historic=False)
             self.historic_mfa = self.make_mfa(historic=True)
             self.historic_mfa.compute()
             stock_projection = self.get_long_term_stock()
@@ -42,7 +44,6 @@ class SteelModel:
             stock_projection = None
             historic_trade = None
 
-        self.future_mfa = self.make_mfa(historic=False, mode=self.cfg.customization.mode)
         self.future_mfa.compute(stock_projection, historic_trade)
 
         self.data_writer.export_mfa(mfa=self.future_mfa)
@@ -58,6 +59,14 @@ class SteelModel:
 
     def modify_parameters(self):
         """Manual changes to parameters in order to match historical scrap consumption."""
+
+        # share of scrap, not share of total outflow
+        new_prm = fd.Parameter(name="fabrication_losses", dims=self.dims["g",])
+        new_prm[...] = self.parameters["fabrication_losses"] * (1. - self.parameters["fabrication_yield"])
+        self.parameters["fabrication_losses"] = new_prm
+
+        self.parameters["forming_yield"] = fd.Parameter(name="forming_yield", dims=self.dims[()], values=np.mean(self.parameters["forming_yield"].values))
+        self.parameters["forming_losses"][...] *= (1. - self.parameters["forming_yield"])
 
         scalar_lifetime_factor = 1.1
         add_assumption_doc(
@@ -149,6 +158,10 @@ class SteelModel:
             mfasystem_class = SteelMFASystem
 
         processes = fd.make_processes(definition.processes)
+
+        for name, process in processes.items():
+            processes[name] = CommonProcess(name=process.name, id=process.id)
+
         flows = fd.make_empty_flows(
             processes=processes,
             flow_definitions=definition.flows,
@@ -159,9 +172,15 @@ class SteelModel:
             stock_definitions=definition.stocks,
             dims=self.dims,
         )
+        fd.set_process_parameters(
+            processes=processes,
+            definitions=definition.processes,
+            parameters=self.parameters,
+        )
         trade_set = TradeSet.from_definitions(
             definitions=definition.trades,
             dims=self.dims,
+            processes=processes,
         )
 
         return mfasystem_class(

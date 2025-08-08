@@ -19,7 +19,7 @@ class SteelMFASystemHistoric(CommonMFASystem):
         self.compute_flows()
         self.compute_in_use_stock()
         self.check_mass_balance()
-        self.check_flows(raise_error=False)
+        self.check_flows()
 
     def compute_flows(self):
         prm = self.parameters

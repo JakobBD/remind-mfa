@@ -164,7 +164,7 @@ class SteelDataExporter(CommonDataExporter):
             {
                 fn: scrap_color
                 for fn, f in mfa.flows.items()
-                if f.from_process.name == "scrap_market" or f.to_process.name == "scrap_market"
+                if "scrap" in f.from_process.name or "scrap" in f.to_process.name
             }
         )
         flow_color_dict.update(
@@ -178,7 +178,7 @@ class SteelDataExporter(CommonDataExporter):
             {
                 fn: trade_color
                 for fn, f in mfa.flows.items()
-                if f.from_process.name == "imports" or f.to_process.name == "exports"
+                if "trade" in f.from_process.name or "trade" in f.to_process.name
             }
         )
         self.cfg.sankey["flow_color_dict"] = flow_color_dict
@@ -256,7 +256,7 @@ class SteelDataExporter(CommonDataExporter):
 
     def visualize_production(self, mfa: fd.MFASystem, regional=True):
         flw = mfa.flows
-        production = flw["bof_production => forming"] + flw["eaf_production => forming"]
+        production = flw["post_production => forming"]
 
         subplot_dim, summing_func, name_str = self._get_regional_vs_global_params(regional)
 
@@ -286,7 +286,7 @@ class SteelDataExporter(CommonDataExporter):
         prm = mfa.parameters
 
         total_production = (
-            flw["forming => ip_market"] / (prm["forming_yield"] * prm["production_yield"])
+            flw["post_production => forming"] / prm["production_yield"]
         )[{"t": mfa.dims["h"]}]
         scrap_supply = (
             flw["recycling => scrap_market"]
@@ -348,7 +348,7 @@ class SteelDataExporter(CommonDataExporter):
 
         flw = mfa.flows
 
-        fabrication = summing_func(flw["good_market => use"])
+        fabrication = summing_func(flw["good_demand => use"])
         sector_splits = fabrication.get_shares_over("g")
         sector_splits = sector_splits.cumsum(dim_letter="g")
 
@@ -489,7 +489,7 @@ class SteelDataExporter(CommonDataExporter):
         constants = {"model": model, "scenario": scenario}
 
         # production
-        prod_df = self.to_iamc_df(future_mfa.flows["forming => ip_market"])
+        prod_df = self.to_iamc_df(future_mfa.flows["forming => ip_supply"])
         prod_idf = pyam.IamDataFrame(
             prod_df,
             variable="Production|Iron and Steel|Steel",
@@ -498,7 +498,7 @@ class SteelDataExporter(CommonDataExporter):
         )
 
         # demand
-        steel_demand_by_good = future_mfa.flows["fabrication => good_market"] / future_mfa.parameters["fabrication_yield"]
+        steel_demand_by_good = future_mfa.flows["fabrication => good_supply"] / future_mfa.parameters["fabrication_yield"]
         demand_df = self.to_iamc_df(steel_demand_by_good)
         demand_df["variable"] = "Material Demand|Iron and Steel|Steel|" + demand_df["Good"]
         demand_df = demand_df.drop(columns=["Good"])

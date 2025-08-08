@@ -1,6 +1,6 @@
 from pydantic import model_validator
 from remind_mfa.common.base_model import RemindMFABaseModel
-from typing import List
+from typing import List, Optional, Dict
 import numpy as np
 from scipy.stats import gmean, hmean
 import sys
@@ -12,6 +12,7 @@ class Trade(RemindMFABaseModel):
 
     imports: fd.FlodymArray
     exports: fd.FlodymArray
+    process: Optional[fd.Process] = None
 
     @model_validator(mode="after")
     def validate_region_dimension(self):
@@ -84,13 +85,20 @@ class TradeSet(RemindMFABaseModel):
     markets: dict[str, Trade]
 
     @classmethod
-    def from_definitions(cls, definitions: List["TradeDefinition"], dims: fd.DimensionSet):
+    def from_definitions(cls, definitions: List["TradeDefinition"], dims: fd.DimensionSet, processes: Optional[Dict[str, fd.Process]] = None):
         markets = {}
         for d in definitions:
             markets[d.name] = Trade(
                 imports=fd.FlodymArray(dims=dims[d.dim_letters]),
                 exports=fd.FlodymArray(dims=dims[d.dim_letters]),
             )
+            if processes and d.process:
+                processes[d.process].trade = markets[d.name]
+                markets[d.name].process = processes[d.process]
+                for connector in d.connectors or []:
+                    if connector not in processes:
+                        raise ValueError(f"Process {d.process} has a connector {connector} that is not defined.")
+                    processes[connector].connected_trade_process = processes[d.process]
         return cls(markets=markets)
 
     def __getitem__(self, item):
@@ -115,4 +123,6 @@ class TradeSet(RemindMFABaseModel):
 
 
 class TradeDefinition(fd.ParameterDefinition):
-    pass
+    process: Optional[str] = None
+    connectors: Optional[List[str]] = None
+
