@@ -1,6 +1,7 @@
 import numpy as np
 import flodym as fd
 from pydantic import ConfigDict, model_validator
+from pynverse import inversefunc
 
 from remind_mfa.common.base_model import RemindMFABaseModel
 
@@ -9,8 +10,6 @@ class PriceDrivenTrade(RemindMFABaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    eta_demand: float = -0.3
-    eta_supply: float = 1.2
     mu: float = 0.012
     """OOM: 1/price; Higher mu means more price-elastic"""
     learning_rate: float = 0.2
@@ -30,8 +29,8 @@ class PriceDrivenTrade(RemindMFABaseModel):
     def compute_price_driven_trade(
         self,
         price_0: fd.FlodymArray,
-        demand_0: fd.FlodymArray,
-        supply_0: fd.FlodymArray,
+        demand_func: callable,
+        supply_func: callable,
     ):
 
         # scalar parameters:
@@ -41,21 +40,23 @@ class PriceDrivenTrade(RemindMFABaseModel):
 
         # init values: multiplication makes a copy
         price = 1.0 * price_0
-        supply = 1.0 * supply_0
-        demand = 1.0 * demand_0
 
         for i in range(self.max_iter):
 
             # demand and supply
-            demand = demand_0 * (price / price_0) ** self.eta_demand
-            supply = supply_0 * (price / price_0) ** self.eta_supply
+            demand = demand_func(price)
+            supply = supply_func(price)
 
             imports, exports = self.get_trade(price, demand)
 
+            # do not update? Or only once?
             # adjust price
             supply_target = demand + exports - imports
-            price_factor = (supply_target / supply) ** (1 / self.eta_supply)
-            price *= price_factor**self.learning_rate
+            price_target = inversefunc(
+                demand_func,
+                y_values=supply_target,
+            )
+            price = price_target**self.learning_rate * price**(1 - self.learning_rate)
 
             # check convergence
             excess = supply - supply_target
@@ -115,14 +116,12 @@ class PriceDrivenTrade(RemindMFABaseModel):
     def get_trade(
         self, price: fd.FlodymArray, demand: fd.FlodymArray
     ) -> tuple[fd.FlodymArray, fd.FlodymArray]:
+
         dims = self.all_dims[
-            (
-                "R",
-                "r",
-            )
-            + tuple(l for l in price.dims.letters if l != "r")
+            ("R", "r") + tuple(l for l in price.dims.letters if l != "r")
         ]
         trade = fd.FlodymArray(dims=dims)
+
         trade[...] = self.origin_shares(price) * demand
         diag_indices = np.diag_indices(self.n_regi) + (slice(None),) * (trade.dims.ndim - 2)
         trade.values[diag_indices] = 0.0

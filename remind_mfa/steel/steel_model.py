@@ -44,7 +44,11 @@ class SteelModel:
             stock_projection = None
             historic_trade = None
 
-        self.future_mfa.compute(stock_projection, historic_trade)
+        self.future_mfa.init(stock_projection, historic_trade)
+        self.future_mfa.compute()
+
+        self.future_mfa.mark_all_unset()
+        self.future_mfa.stocks["in_use"].inflow.mark_set()
 
         self.data_writer.export_mfa(mfa=self.future_mfa)
         self.data_writer.visualize_results(model=self)

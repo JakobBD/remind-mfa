@@ -1,9 +1,6 @@
 import flodym as fd
-import numpy as np
-from enum import Enum
 
 from remind_mfa.common.trade import TradeSet
-from remind_mfa.common.trade_extrapolation import extrapolate_trade
 from remind_mfa.common.price_driven_trade import PriceDrivenTrade
 from remind_mfa.common.common_mfa_system import CommonMFASystem
 
@@ -11,12 +8,7 @@ from remind_mfa.common.common_mfa_system import CommonMFASystem
 
 class SteelMFASystem(CommonMFASystem):
 
-    def compute(self, stock: fd.FlodymArray, historic_trade: TradeSet):
-        """
-        Perform all computations for the MFA system.
-        """
-        # TODO: delete post-production
-
+    def init(self, stock: fd.FlodymArray, historic_trade: TradeSet):
         for name, trade in self.trade_set.markets.items():
             process = trade.process
             process.historic_trade = historic_trade.markets[name]
@@ -26,6 +18,13 @@ class SteelMFASystem(CommonMFASystem):
             mean=self.parameters["lifetime_mean"],
             std=self.parameters["lifetime_std"],
         )
+
+
+    def compute(self):
+        """
+        Perform all computations for the MFA system.
+        """
+        # TODO: delete post-production
 
         self.compute_all_possible()
 
@@ -68,10 +67,23 @@ class SteelMFASystem(CommonMFASystem):
             imports_target=self.trade_set["intermediate"].imports[2022],
             exports_target=self.trade_set["intermediate"].exports[2022],
         )
+
+        def demand_func(p):
+            eta_demand = -0.3
+            return self.flows["ip_market => fabrication"].values * (
+                p / price
+            ) ** eta_demand
+
+        def supply_func(p):
+            eta_supply = 1.2
+            return self.flows["forming => ip_market"].values * (
+                p / price
+            ) ** eta_supply
+
         price, demand, supply, imports, exports = model.compute_price_driven_trade(
             price_0=price,
-            demand_0=self.flows["ip_market => fabrication"],
-            supply_0=self.flows["forming => ip_market"],
+            demand_func=demand_func,
+            supply_func=supply_func,
         )
 
         self.flows["ip_market => fabrication"][...] = demand
