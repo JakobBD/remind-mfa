@@ -27,7 +27,7 @@ class PlasticsModel(CommonModel):
     get_definition = staticmethod(get_plastics_definition)
     custom_scn_prm_def = plastics_scn_prm_def
 
-    def get_long_term_stock(self):
+    def get_long_term_stock(self) -> fd.FlodymArray:
         """
         Stock extrapolation is first done per good over all regions;
         upper bound of saturation level is set as the maximum historic stock per capita;

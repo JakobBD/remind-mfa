@@ -7,7 +7,7 @@ class InflowDrivenHistoricCementMFASystem(CommonMFASystem):
 
     cfg: CementCfg
 
-    def compute(self):
+    def compute(self) -> None:
         """
         Perform all computations for the MFA system.
         """
@@ -16,7 +16,7 @@ class InflowDrivenHistoricCementMFASystem(CommonMFASystem):
         self.check_mass_balance()
         self.check_flows()
 
-    def compute_in_use_stock(self):
+    def compute_in_use_stock(self) -> None:
         prm = self.parameters
         stk = self.stocks
         cement_consumption = (
@@ -33,7 +33,7 @@ class InflowDrivenHistoricCementMFASystem(CommonMFASystem):
         )
         stk["historic_cement_in_use"].compute()
 
-    def compute_flows(self):
+    def compute_flows(self) -> None:
         flw = self.flows
         stk = self.stocks
 

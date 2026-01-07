@@ -7,7 +7,7 @@ class PlasticsMFASystemHistoric(fd.MFASystem):
 
     cfg: PlasticsCfg
 
-    def compute(self):
+    def compute(self) -> None:
         """
         Perform all computations for the MFA system.
         """
@@ -17,14 +17,14 @@ class PlasticsMFASystemHistoric(fd.MFASystem):
         # self.check_mass_balance()
         # self.check_flows(no_error=True)
 
-    def compute_historic_stock(self):
+    def compute_historic_stock(self) -> None:
         self.stocks["in_use_historic"].inflow[...] = self.parameters["consumption"]
         self.stocks["in_use_historic"].lifetime_model.set_prms(
             mean=self.parameters["lifetime_mean"], std=self.parameters["lifetime_std"]
         )
         self.stocks["in_use_historic"].compute()
 
-    def compute_trade(self):
+    def compute_trade(self) -> None:
 
         for name, trade in self.trade_set.markets.items():
             if name.endswith("_his"):

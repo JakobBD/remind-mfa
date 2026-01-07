@@ -10,7 +10,7 @@ class CommonMFASystem(fd.MFASystem):
     cfg: CommonCfg
     trade_set: Optional[TradeSet] = None
 
-    def fill_trade(self):
+    def fill_trade(self) -> None:
         """
         Fill trade from parameters named after the scheme [market_name]_imports and [market_name]_exports.
         """
