@@ -13,7 +13,7 @@ class SteelMFASystem(CommonMFASystem):
 
     cfg: SteelCfg
 
-    def compute(self, stock_projection: fd.FlodymArray, historic_trade: TradeSet):
+    def compute(self, stock_projection: fd.FlodymArray, historic_trade: TradeSet) -> None:
         """
         Perform all computations for the MFA system.
         """
@@ -25,7 +25,7 @@ class SteelMFASystem(CommonMFASystem):
         self.check_flows(raise_error=False)
         # self.update_price_elastic()
 
-    def update_price_elastic(self):
+    def update_price_elastic(self) -> None:
         self.compute_price_elastic_trade()
         # self.compute_consumption()
         # self.compute_in_use_stock() # ensure inflow-driven
@@ -35,7 +35,7 @@ class SteelMFASystem(CommonMFASystem):
         # self.check_mass_balance()
         # self.check_flows(raise_error=False)
 
-    def compute_price_elastic_trade(self):
+    def compute_price_elastic_trade(self) -> None:
         price = fd.FlodymArray(dims=self.dims["t", "r"])
         price[...] = 500.0
         # price.values[131:201,2] = np.minimum(800., np.linspace(500, 2000, 70))
@@ -61,7 +61,7 @@ class SteelMFASystem(CommonMFASystem):
         self.flows["imports => ip_market"][...] = self.trade_set["steel"].imports
         self.flows["ip_market => exports"][...] = self.trade_set["steel"].exports
 
-    def compute_in_use_stock(self, stock_projection):
+    def compute_in_use_stock(self, stock_projection: fd.FlodymArray) -> None:
         self.stocks["in_use"].stock[...] = stock_projection
         self.stocks["in_use"].lifetime_model.set_prms(
             mean=self.parameters["lifetime_mean"], std=self.parameters["lifetime_std"]
@@ -76,7 +76,7 @@ class SteelMFASystem(CommonMFASystem):
             ]
             logging.warning(f"In-use stock inflow <0 in regions {negative_regions}!")
 
-    def extrapolate_trade_set(self, historic_trade: TradeSet):
+    def extrapolate_trade_set(self, historic_trade: TradeSet) -> None:
         product_demand = self.stocks["in_use"].inflow
         extrapolate_trade(
             historic_trade["indirect"],
@@ -110,7 +110,7 @@ class SteelMFASystem(CommonMFASystem):
         self.trade_set["scrap"].exports[...] = self.trade_set["scrap"].exports.minimum(eol_products)
         self.trade_set["scrap"].balance(to="minimum")
 
-    def compute_flows(self):
+    def compute_flows(self) -> None:
         # abbreviations for better readability
         prm = self.parameters
         flw = self.flows
@@ -196,7 +196,7 @@ class SteelMFASystem(CommonMFASystem):
         flw["sysenv => extraction"][...] = flw["extraction => bof_production"]
         # fmt: on
 
-    def compute_other_stocks(self):
+    def compute_other_stocks(self) -> None:
         stk = self.stocks
         flw = self.flows
 

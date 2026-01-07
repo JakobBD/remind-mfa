@@ -12,7 +12,7 @@ class StockDrivenCementMFASystem(CommonMFASystem):
 
     cfg: CementCfg
 
-    def compute(self, stock_projection: fd.FlodymArray, historic_trade: TradeSet):
+    def compute(self, stock_projection: fd.FlodymArray, historic_trade: TradeSet) -> None:
         """
         Perform all computations for the MFA system.
         """
@@ -28,7 +28,7 @@ class StockDrivenCementMFASystem(CommonMFASystem):
         self.check_mass_balance()
         self.check_flows(raise_error=False)
 
-    def compute_in_use_stock(self, cement_stock_projection: fd.FlodymArray):
+    def compute_in_use_stock(self, cement_stock_projection: fd.FlodymArray) -> None:
         prm = self.parameters
         stk = self.stocks
 
@@ -47,7 +47,7 @@ class StockDrivenCementMFASystem(CommonMFASystem):
         )
         stk["in_use"].compute()
 
-    def compute_flows(self):
+    def compute_flows(self) -> None:
         prm = self.parameters
         flw = self.flows
         stk = self.stocks
@@ -92,7 +92,7 @@ class StockDrivenCementMFASystem(CommonMFASystem):
         ) * (1 - prm["clinker_ratio"])
         flw["sysenv => prod_product"][...] = flw["prod_product => use"] * (1 - self.cement_ratio)
 
-    def compute_other_stocks(self):
+    def compute_other_stocks(self) -> None:
         flw = self.flows
         stk = self.stocks
 

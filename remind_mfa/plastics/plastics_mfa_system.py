@@ -209,7 +209,7 @@ class PlasticsMFASystemFuture(fd.MFASystem):
 
         # fmt: on
 
-    def compute_other_stocks(self):
+    def compute_other_stocks(self) -> None:
 
         stk = self.stocks
         flw = self.flows
