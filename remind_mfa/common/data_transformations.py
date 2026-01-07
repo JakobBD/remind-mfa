@@ -56,7 +56,7 @@ class Bound(RemindMFABaseModel):
         }
 
     @staticmethod
-    def _extract_bound_array(input_val, dims, bound_name):
+    def _extract_bound_array(input_val: Union[np.ndarray, fd.FlodymArray, float, int], dims: fd.DimensionSet, bound_name: str) -> tuple[np.ndarray, fd.DimensionSet]:
         """
         Extracts the array from the input value, ensuring it matches the expected dimensions.
         """
@@ -89,7 +89,7 @@ class Bound(RemindMFABaseModel):
 
         return self
 
-    def extend_dims(self, target_dims: fd.DimensionSet):
+    def extend_dims(self, target_dims: fd.DimensionSet) -> "Bound":
         """
         Extend the bounds to a new set of dimensions.
         """
@@ -118,7 +118,7 @@ class BoundList(RemindMFABaseModel):
                 raise ValueError(f"Bound {bound.var_name} has dimensions not in target_dims.")
         return self
 
-    def to_np_array(self, all_prm_names: list[str]) -> np.ndarray:
+    def to_np_array(self, all_prm_names: list[str]) -> Union[np.ndarray, None]:
         """
         Creates bounds array where each element is tuple of lower and upper bounds for each parameter.
         Useful if bounds should be passed to optimization algorthms like from scipy.

@@ -49,12 +49,12 @@ class Extrapolation(RemindMFABaseModel):
         return self
 
     @property
-    def n_prms(self):
+    def n_prms(self) -> int:
         """Number of parameters to be fitted."""
         return len(self.prm_names)
 
     @property
-    def n_historic(self):
+    def n_historic(self) -> int:
         """Number of historic data points to use for regression."""
         return self.data_to_extrapolate.shape[0]
 
@@ -63,7 +63,7 @@ class Extrapolation(RemindMFABaseModel):
         """Optimized parameters after regression (read-only)."""
         return self._fit_prms
 
-    def extrapolate(self, historic_from_regression: bool = False):
+    def extrapolate(self, historic_from_regression: bool = False) -> np.ndarray:
         """
         Calls the regression method and returns extrapolated values.
         Per default, historic values are kept, but this can be changed by setting `historic_from_regression` to True.
@@ -110,7 +110,7 @@ class Extrapolation(RemindMFABaseModel):
 
         return fitting_function
 
-    def regress(self):
+    def regress(self) -> np.ndarray:
         """
         Fits the data to the predictor values using regression and returns the extrapolated values.
         The regression is performed independently for each dimension specified in `independent_dims`.
@@ -140,7 +140,7 @@ class Extrapolation(RemindMFABaseModel):
 
         return regression
 
-    def regress_common(self, predictor, data, weights, bounds):
+    def regress_common(self, predictor: np.ndarray, data: np.ndarray, weights: np.ndarray, bounds: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
         """
         Finds optimal fit of data through least squares. Weights and bounds are applied.
         """
@@ -159,7 +159,7 @@ class Extrapolation(RemindMFABaseModel):
     @staticmethod
     def correct_initial_guess_with_bounds(
         initial_guess: np.ndarray, bounds: Tuple[np.ndarray, np.ndarray]
-    ):
+    ) -> np.ndarray:
         """Ensure that the initial guess is within the provided bounds."""
 
         outside_bounds = (initial_guess < bounds[0]) + (initial_guess > bounds[1])
@@ -182,10 +182,10 @@ class ProportionalExtrapolation(Extrapolation):
     prm_names: list[str] = ["proportionality_factor"]
 
     @staticmethod
-    def func(x, prms):
+    def func(x: np.ndarray, prms: np.ndarray) -> np.ndarray:
         return prms[0] * x
 
-    def initial_guess(self, predictor_values, data_to_extrapolate):
+    def initial_guess(self, predictor_values: np.ndarray, data_to_extrapolate: np.ndarray) -> np.ndarray:
         return np.array([1.0])
 
 
@@ -194,10 +194,10 @@ class PehlExtrapolation(Extrapolation):
     prm_names: list[str] = ["saturation_level", "stretch_factor"]
 
     @staticmethod
-    def func(x, prms):
+    def func(x: np.ndarray, prms: np.ndarray) -> np.ndarray:
         return prms[0] / (1.0 + np.exp(prms[1] / x))
 
-    def initial_guess(self, predictor_values, data_to_extrapolate):
+    def initial_guess(self, predictor_values: np.ndarray, data_to_extrapolate: np.ndarray) -> np.ndarray:
         return np.array(
             [
                 2.0 * np.max(predictor_values[self.n_historic - 1, ...]),
@@ -211,10 +211,10 @@ class ExponentialSaturationExtrapolation(Extrapolation):
     prm_names: list[str] = ["saturation_level", "stretch_factor"]
 
     @staticmethod
-    def func(x, prms):
+    def func(x: np.ndarray, prms: np.ndarray) -> np.ndarray:
         return prms[0] * (1 - np.exp(-prms[1] * x))
 
-    def initial_guess(self, predictor_values, data_to_extrapolate):
+    def initial_guess(self, predictor_values: np.ndarray, data_to_extrapolate: np.ndarray) -> np.ndarray:
         current_level = np.max(data_to_extrapolate[-1, ...])
         current_extrapolator = np.max(predictor_values[self.n_historic - 1, ...])
         initial_saturation_level = 2.0 * current_level
@@ -229,10 +229,10 @@ class LogisticExtrapolation(Extrapolation):
     prm_names: list[str] = ["saturation_level", "stretch_factor", "x_offset"]
 
     @staticmethod
-    def func(x, prms):
+    def func(x: np.ndarray, prms: np.ndarray) -> np.ndarray:
         return prms[0] / (1.0 + np.exp(-prms[1] * (x - prms[2])))
 
-    def initial_guess(self, predictor_values, data_to_extrapolate):
+    def initial_guess(self, predictor_values: np.ndarray, data_to_extrapolate: np.ndarray) -> np.ndarray:
         max_level = np.max(data_to_extrapolate)
         sat_level_guess = 2 * max_level
 

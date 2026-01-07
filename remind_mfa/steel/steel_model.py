@@ -29,7 +29,7 @@ class SteelModel(CommonModel):
     get_definition = staticmethod(get_steel_definition)
     custom_scn_prm_def = steel_scn_prm_def
 
-    def modify_parameters(self):
+    def modify_parameters(self) -> None:
         """Manual changes to parameters in order to match historical scrap consumption."""
 
         scalar_lifetime_factor = 1.1
@@ -174,7 +174,7 @@ class SteelModel(CommonModel):
             total_in_use_stock = total_in_use_stock * sector_splits
         return total_in_use_stock
 
-    def get_saturation_level(self, historic_stocks: fd.StockArray):
+    def get_saturation_level(self, historic_stocks: fd.StockArray) -> float:
         pop = self.parameters["population"]
         gdppc = self.parameters["gdppc"]
         historic_pop = pop[{"t": self.dims["h"]}]
@@ -206,7 +206,7 @@ class SteelModel(CommonModel):
 
         return saturation_level
 
-    def get_high_stock_sector_split(self):
+    def get_high_stock_sector_split(self) -> fd.FlodymArray:
         prm = self.parameters
         last_lifetime = prm["lifetime_mean"][{"t": self.dims["t"].items[-1]}]
         last_gdppc = prm["gdppc"][{"t": self.dims["t"].items[-1]}]
@@ -214,7 +214,7 @@ class SteelModel(CommonModel):
         high_stock_sector_split = (av_lifetime * prm["sector_split_high"]).get_shares_over("g")
         return high_stock_sector_split
 
-    def calc_stock_sector_splits(self):
+    def calc_stock_sector_splits(self) -> fd.FlodymArray:
         historical_sector_splits = self.historic_mfa.stocks[
             "historic_in_use"
         ].stock.get_shares_over("g")
