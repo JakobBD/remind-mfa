@@ -33,7 +33,7 @@ class CommonModel:
         self.modify_parameters()
         self.init_export_and_visualization()
 
-    def run(self):
+    def run(self) -> None:
         self.historic_mfa = self.make_mfa(historic=True)
         self.historic_mfa.compute()
 
@@ -48,17 +48,17 @@ class CommonModel:
         self.future_mfa = self.make_mfa(historic=False)
         self.future_mfa.compute(stock_projection, historic_trade)
 
-    def export(self):
+    def export(self) -> None:
         self.data_writer.export(model=self)
 
-    def visualize(self):
+    def visualize(self) -> None:
         self.visualizer.visualize(model=self)
 
-    def set_definition(self):
+    def set_definition(self) -> None:
         self.definition_historic = self.get_definition(self.cfg, historic=True)
         self.definition_future = self.get_definition(self.cfg, historic=False)
 
-    def read_data(self):
+    def read_data(self) -> None:
         self.data_reader = CommonDataReader(
             cfg=self.cfg,
             definition=self.definition_future,
@@ -69,7 +69,7 @@ class CommonModel:
             self.definition_future.parameters, dims=self.dims
         )
 
-    def read_scenario_parameters(self):
+    def read_scenario_parameters(self) -> None:
         parameter_definitions = common_scn_prm_def + self.custom_scn_prm_def
         scenario_reader = ScenarioReader(
             name=self.cfg.model_switches.scenario,
@@ -80,14 +80,14 @@ class CommonModel:
         )
         self.scenario_parameters = scenario_reader.get_parameters()
 
-    def modify_parameters(self):
+    def modify_parameters(self) -> None:
         """Manual changes to parameters"""
         pass
 
-    def get_long_term_stock(self):
+    def get_long_term_stock(self) -> fd.FlodymArray:
         raise NotImplementedError
 
-    def init_export_and_visualization(self):
+    def init_export_and_visualization(self) -> None:
         display_names = self.DisplayNamesCls()
         self.data_writer = self.DataExporterCls(
             cfg=self.cfg.export,

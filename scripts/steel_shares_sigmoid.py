@@ -19,7 +19,7 @@ gdppc = 10.0**log_gdppc
 
 # this is the core of the calculation: sigmoid over gdppc
 # -3 and +3 are x-values where the sigmoid has almost reached its limits (0 and 1)
-def alpha(gdppc):
+def alpha(gdppc: np.ndarray) -> np.ndarray:
     x = -3.0 + 6.0 * (np.log(gdppc) - np.log(gdppc_ind)) / (np.log(gdppc_usa) - np.log(gdppc_ind))
     return 1.0 / (1.0 + np.exp(-x))
 

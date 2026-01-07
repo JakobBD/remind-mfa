@@ -28,42 +28,42 @@ def blend(
 
 def blending_factor(x: np.ndarray, type: str) -> np.ndarray:
 
-    def linear(x):
+    def linear(x: np.ndarray) -> np.ndarray:
         x = np.clip(x, 0, 1)
         return x
 
-    def sigmoid3(x):
+    def sigmoid3(x: np.ndarray) -> np.ndarray:
         return 1.0 / (1.0 + np.exp(3 - 6 * x))
 
-    def sigmoid4(x):
+    def sigmoid4(x: np.ndarray) -> np.ndarray:
         return 1.0 / (1.0 + np.exp(4 - 8 * x))
 
-    def extrapol_sigmoid3(x):
+    def extrapol_sigmoid3(x: np.ndarray) -> np.ndarray:
         return (sigmoid3(x) - sigmoid3(0)) / (sigmoid3(1) - sigmoid3(0))
 
-    def extrapol_sigmoid4(x):
+    def extrapol_sigmoid4(x: np.ndarray) -> np.ndarray:
         return (sigmoid4(x) - sigmoid4(0)) / (sigmoid4(1) - sigmoid4(0))
 
-    def clamped_sigmoid3(x):
+    def clamped_sigmoid3(x: np.ndarray) -> np.ndarray:
         x = np.clip(x, 0, 1)
         return extrapol_sigmoid3(x)
 
-    def clamped_sigmoid4(x):
+    def clamped_sigmoid4(x: np.ndarray) -> np.ndarray:
         x = np.clip(x, 0, 1)
         return extrapol_sigmoid4(x)
 
-    def hermite(x):
+    def hermite(x: np.ndarray) -> np.ndarray:
         x = np.clip(x, 0, 1)
         return 3 * x**2 - 2 * x**3
 
-    def quintic(x):
+    def quintic(x: np.ndarray) -> np.ndarray:
         x = np.clip(x, 0, 1)
         return 6 * x**5 - 15 * x**4 + 10 * x**3
 
-    def poly_mix(x):
+    def poly_mix(x: np.ndarray) -> np.ndarray:
         return 0.5 * hermite(x) + 0.5 * quintic(x)
 
-    def converge_quadratic(x):
+    def converge_quadratic(x: np.ndarray) -> np.ndarray:
         x = np.clip(x, 0, 1)
         return 1 - (1 - x) ** 2
 

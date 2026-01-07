@@ -35,7 +35,7 @@ class Trade(RemindMFABaseModel):
     def net_exports(self):
         return self.exports - self.imports
 
-    def balance(self, to: str = "hmean"):
+    def balance(self, to: str = "hmean") -> None:
         global_imports = self.imports.sum_over("r")
         global_exports = self.exports.sum_over("r")
 
@@ -54,7 +54,7 @@ class Trade(RemindMFABaseModel):
     @staticmethod
     def get_reference_trade(
         global_imports: fd.FlodymArray, global_exports: fd.FlodymArray, to: str = "hmean"
-    ):
+    ) -> fd.FlodymArray:
         if to == "maximum":
             return global_imports.maximum(global_exports)
         elif to == "minimum":
@@ -89,7 +89,7 @@ class TradeSet(RemindMFABaseModel):
     markets: dict[str, Trade]
 
     @classmethod
-    def from_definitions(cls, definitions: List["TradeDefinition"], dims: fd.DimensionSet):
+    def from_definitions(cls, definitions: List["TradeDefinition"], dims: fd.DimensionSet) -> "TradeSet":
         markets = {}
         for d in definitions:
             markets[d.name] = Trade(
@@ -98,10 +98,10 @@ class TradeSet(RemindMFABaseModel):
             )
         return cls(markets=markets)
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: str) -> Trade:
         return self.markets[item]
 
-    def __setitem__(self, key: str, value: Trade):
+    def __setitem__(self, key: str, value: Trade) -> None:
         if not isinstance(value, Trade):
             raise ValueError("TradeSet can only store Trade objects.")
         if key not in self.markets:
@@ -114,7 +114,7 @@ class TradeSet(RemindMFABaseModel):
             )
         self.markets[key] = value
 
-    def balance(self, to: str = None):
+    def balance(self, to: str = None) -> None:
         for trade in self.markets.values():
             trade.balance(to=to) if to is not None else trade.balance()
 

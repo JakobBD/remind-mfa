@@ -56,7 +56,7 @@ class StockExtrapolation:
         self.stock_correction = stock_correction
         self.extrapolate()
 
-    def set_dims(self, indep_fit_dim_letters: Tuple[str, ...]):
+    def set_dims(self, indep_fit_dim_letters: Tuple[str, ...]) -> None:
         """
         Check target_dim_letters.
         Set fit_dim_letters and check:
@@ -79,7 +79,7 @@ class StockExtrapolation:
                 raise ValueError("fit_dim_letters must be subset of target_dim_letters.")
         self.get_fit_idx()
 
-    def get_fit_idx(self):
+    def get_fit_idx(self) -> None:
         """Get the indices of the fit dimensions in the historic_stocks dimensions."""
         self.fit_dim_idx = tuple(
             i
@@ -87,12 +87,12 @@ class StockExtrapolation:
             if x in self.indep_fit_dim_letters
         )
 
-    def extrapolate(self):
+    def extrapolate(self) -> None:
         """Preprocessing and extrapolation."""
         self.per_capita_transformation()
         self.gdp_regression()
 
-    def per_capita_transformation(self):
+    def per_capita_transformation(self) -> None:
         self.pop = self.parameters["population"]
         self.gdppc = self.parameters["gdppc"]
         if self.do_gdppc_accumulation:
@@ -107,7 +107,7 @@ class StockExtrapolation:
         self.historic_gdppc[...] = self.gdppc[{"t": self.dims["h"]}]
         self.historic_stocks_pc[...] = self.historic_stocks / self.historic_pop
 
-    def gdp_regression(self):
+    def gdp_regression(self) -> None:
         """Updates per capita stock to future by extrapolation."""
 
         prediction_out = self.stocks_pc.values.copy()
@@ -227,7 +227,7 @@ class StockExtrapolation:
         # transform back to total stocks
         self.stocks[...] = self.stocks_pc * self.pop
 
-    def loggdp_time_regression(self, gdppc, weight: float) -> np.ndarray:
+    def loggdp_time_regression(self, gdppc: np.ndarray, weight: float) -> np.ndarray:
         time = np.array(self.dims["t"].items)
         predictor = np.log10(gdppc[...]) * weight + time[:, None, None]
         return predictor

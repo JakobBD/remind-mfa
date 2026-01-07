@@ -2,7 +2,7 @@ import pandas as pd
 import os
 
 
-def merge_parameters_sources():
+def merge_parameters_sources() -> None:
     """Merge parameter files with source information and generate markdown documentation."""
 
     modules = ["steel", "plastics", "cement"]
@@ -68,7 +68,7 @@ def merge_parameters_sources():
         print(f"Generated {output_file}")
 
 
-def on_pre_build(config):
+def on_pre_build(config: dict) -> dict:
     """Run before the build starts."""
     merge_parameters_sources()
     return config

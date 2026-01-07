@@ -12,7 +12,7 @@ class SteelMFASystemHistoric(CommonMFASystem):
 
     cfg: SteelCfg
 
-    def compute(self):
+    def compute(self) -> None:
         """
         Perform all computations for the MFA system.
         """
@@ -24,7 +24,7 @@ class SteelMFASystemHistoric(CommonMFASystem):
         self.check_mass_balance()
         self.check_flows(raise_error=False)
 
-    def compute_flows(self):
+    def compute_flows(self) -> None:
         prm = self.parameters
         flw = self.flows
         trd = self.trade_set
@@ -65,7 +65,7 @@ class SteelMFASystemHistoric(CommonMFASystem):
         flw["fabrication => good_market"][...] = flw["good_market => use"] - trd["indirect"].net_imports
         # fmt: on
 
-    def scale_indirect_trade_to_fabrication(self, fabrication_to_good_market_total: fd.FlodymArray):
+    def scale_indirect_trade_to_fabrication(self, fabrication_to_good_market_total: fd.FlodymArray) -> None:
         """Recalculate indirect trade according to available inflow from fabrication:
         Exports are scaled down such that their sum does not exceed the fabrication
         """
@@ -100,7 +100,7 @@ class SteelMFASystemHistoric(CommonMFASystem):
         # fmt: on
         return min_imports + fabrication_domestic
 
-    def calc_sector_split(self) -> fd.FlodymArray:
+    def calc_sector_split(self) -> None:
         """Blend over GDP per capita between typical sector splits for low and high GDP per capita regions."""
         target_dims = self.dims["h", "r", "g"]
         self.parameters["sector_split"] = fd.Parameter(dims=target_dims, name="sector_split")
@@ -146,7 +146,7 @@ class SteelMFASystemHistoric(CommonMFASystem):
         )
         return
 
-    def compute_in_use_stock(self):
+    def compute_in_use_stock(self) -> None:
         flw = self.flows
         stk = self.stocks
         prm = self.parameters

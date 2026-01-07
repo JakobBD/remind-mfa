@@ -22,7 +22,7 @@ class RemindMFADefinition(fd.MFADefinition):
     """List of definitions of parameters used in the model."""
 
 
-def get_definition():
+def get_definition() -> RemindMFADefinition:
     return RemindMFADefinition(
         dimensions=[], processes=[], flows=[], stocks=[], parameters=[], trades=[]
     )

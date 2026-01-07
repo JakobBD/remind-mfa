@@ -25,7 +25,7 @@ class ScenarioReader(RemindMFABaseModel):
             scenario.apply(self._parameters)
         return self._parameters
 
-    def init_parameters(self):
+    def init_parameters(self) -> None:
         for param_def in self.parameter_definitions:
             name = param_def.name
             if isinstance(param_def, RemindMFAParameterDefinition):
@@ -34,7 +34,7 @@ class ScenarioReader(RemindMFABaseModel):
             elif isinstance(param_def, PlainDataPointDefinition):
                 self._parameters[name] = None
 
-    def read_all(self):
+    def read_all(self) -> None:
         name = self.name
         while True:
             scenario = self.read_single(name)
@@ -56,10 +56,10 @@ class Scenario(RemindMFABaseModel):
     parent: Optional[str] = None
     data: List["ScenarioDataPoint"] = []
 
-    def filter_data_by_model(self, model_name: ModelNames):
+    def filter_data_by_model(self, model_name: ModelNames) -> None:
         self.data = [p for p in self.data if model_name in p.models]
 
-    def apply(self, parameters: dict):
+    def apply(self, parameters: dict) -> None:
         for data_point in self.data:
             data_point.apply(parameters)
 
@@ -80,7 +80,7 @@ class ScenarioDataPoint(RemindMFABaseModel):
                 return [ModelNames(value)]
         return value
 
-    def apply(self, parameters: dict):
+    def apply(self, parameters: dict) -> None:
         parameter = parameters[self.parameter]
         if isinstance(parameter, fd.Parameter):
             if self.index:

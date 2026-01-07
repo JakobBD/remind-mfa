@@ -12,7 +12,7 @@ _assumptions = []
 
 def add_assumption_doc(
     type: str, name: str, description: str, value: str = None, source: str = None
-):
+) -> None:
     """
     Add an assumption to the list of assumptions. The assumption is stored in a global list
     and can be printed later using the print_assumptions() function.
@@ -62,7 +62,7 @@ class Assumption(RemindMFABaseModel):
             raise ValueError("assumption type must be one of: " + str(cls._allowed_types))
         return v
 
-    def __str__(self):
+    def __str__(self) -> str:
         str_out = "Assumption:\n"
         str_out += f"  Type: {self.type}\n"
         str_out += f"  Name: {self.name}\n"

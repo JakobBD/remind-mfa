@@ -22,7 +22,7 @@ def run_remind_mfa(cfg_file: str):
     logging.info("Visualization completed.")
 
 
-def configure_logger():
+def configure_logger() -> None:
     logging.basicConfig(
         format="%(asctime)s %(levelname)-8s %(message)s",
         level=logging.INFO,
@@ -31,7 +31,7 @@ def configure_logger():
     )
 
 
-def read_model_config(filename):
+def read_model_config(filename: str) -> dict:
     with open(filename, "r") as stream:
         data = yaml.safe_load(stream)
     return {k: v for k, v in data.items()}
