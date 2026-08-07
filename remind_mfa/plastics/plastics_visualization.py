@@ -6,6 +6,8 @@ import plotly.graph_objects as go
 from typing import TYPE_CHECKING
 import flodym.export as fde
 import plotly.express as px
+import flochart as flc
+from matplotlib import pyplot as plt
 
 from remind_mfa.common.common_visualization import CommonVisualizer
 
@@ -156,20 +158,22 @@ class PlasticsVisualizer(CommonVisualizer):
 
     def visualize_sankey(self, mfa: fd.MFASystem):
         # Define colors for each stage
-        production_color = "#EDC948"
-        use_color = "#9EC3D5"
-        eol_color = "#499894"
-        recycle_color = "#86BCB6"
-        emission_color = "#E15759"
-        trade_color = "#D37295"
+        colors = dict(
+            production_color = "#EDC948",
+            use_color = "#9EC3D5",
+            eol_color = "#499894",
+            recycle_color = "#86BCB6",
+            emission_color = "#E15759",
+            trade_color = "#D37295",
+        )
 
         # Initialize default flow color mapping
-        flow_color_dict = {"default": production_color}
+        flow_color_dict = {"default": colors["production_color"]}
 
         # Assign colors to 'use' flows
         flow_color_dict.update(
             {
-                fn: use_color
+                fn: colors["use_color"]
                 for fn, f in mfa.flows.items()
                 if f.from_process.name == "use" or f.to_process.name == "use"
             }
@@ -178,7 +182,7 @@ class PlasticsVisualizer(CommonVisualizer):
         # Assign colors to end-of-life flows
         flow_color_dict.update(
             {
-                fn: eol_color
+                fn: colors["eol_color"]
                 for fn, f in mfa.flows.items()
                 if f.from_process.name in ("eol", "collected")
             }
@@ -187,7 +191,7 @@ class PlasticsVisualizer(CommonVisualizer):
         # Assign colors to emission flows
         flow_color_dict.update(
             {
-                fn: emission_color
+                fn: colors["emission_color"]
                 for fn, f in mfa.flows.items()
                 if f.to_process.name
                 in ("atmosphere", "mismanaged", "uncontrolled", "emission", "losses")
@@ -197,7 +201,7 @@ class PlasticsVisualizer(CommonVisualizer):
         # Assign colors to recycling flows
         flow_color_dict.update(
             {
-                fn: recycle_color
+                fn: colors["recycle_color"]
                 for fn, f in mfa.flows.items()
                 if f.from_process.name in ("reclmech", "reclchem")
                 or f.to_process.name in ("reclmech", "reclchem")
@@ -207,7 +211,7 @@ class PlasticsVisualizer(CommonVisualizer):
         # Assign colors to trade flows
         flow_color_dict.update(
             {
-                fn: trade_color
+                fn: colors["trade_color"]
                 for fn, f in mfa.flows.items()
                 if f.from_process.name in ("imports", "exports")
                 or f.to_process.name in ("imports", "exports")
@@ -232,16 +236,98 @@ class PlasticsVisualizer(CommonVisualizer):
         plotter = fde.PlotlySankeyPlotter(
             mfa=mfa, display_names=display_names_fmt, **self.cfg.sankey.plotter_args
         )
-        fig = plotter.plot()
+        # fig = plotter.plot()
+        links = plotter._get_links_dict()
+        nodes = plotter._get_nodes_dict()
 
+        # TODO: Make engine configurable via config file
+        engine = "flochart"
+
+        if engine == "flochart":
+            self.plot_sankey_flochart(nodes=nodes, links=links, colors=colors)
+        elif engine == "plotly":
+            self.plot_sankey_plotly(nodes=nodes, links=links, colors=colors)
+
+
+    def plot_sankey_flochart(self, nodes: dict, links: dict, colors: dict):
+        nodesxy = [
+            ( 0, 0),  # 'Feedstock<br>(fossil)',
+            ( 0, 0),  # 'Feedstock<br>(biomass)',
+            ( 0, 0),  # 'Feedstock<br>(DACCU)',
+            ( 0, 0),  # 'Feedstock<br>(CCU)',
+            ( 1, 0),  # 'High value chemicals input',
+            ( 1, 1),  # 'C4 input',
+            ( 2, 0),  # 'Polymerization',
+            ( 3, 0),  # 'Primary<br>market',
+            ( 4, 0),  # 'Fabrication',
+            ( 5, 0),  # 'Good market',
+            ( 6, 0),  # 'Use phase',
+            ( 7, 0),  # 'EoL',
+            ( 0, 0),  # 'Waste market',
+            ( 9, 0),  # 'Mechanical<br>recycling',
+            ( 9, 1),  # 'Chemical<br>recycling',
+            (10, 2),  # 'Incineration',
+            ( 0, 0),  # 'Landfilled',
+            ( 8, 0),  # 'Collected',
+            ( 8, 2),  # 'Uncollected',
+            ( 9, 2),  # 'Uncontrolled',
+            (11, 0),  # 'Emissions',
+            ( 0, 0),  # 'Captured',
+            (12, 0),  # 'Atmosphere',
+            ( 1, 2),  # 'Other reactants',
+            ( 0, 0),  # 'Losses',
+        ]
+
+        def to_node_def(i):
+            return flc.NodeDefinition(
+                name = str(i),
+                x = nodesxy[i][0],
+                y = nodesxy[i][1],
+                min_size_x= 0.2,
+            )
+        node_defs = [to_node_def(i) for i in range(len(nodes["label"]))]
+
+        def to_flow_def(i):
+            return flc.FlowDefinition(
+                name = f"{links["source"][i]} => {links["target"][i]}",
+                source = str(links["source"][i]),
+                target = str(links["target"][i]),
+                value = links["value"][i] / 5e8,
+                color = links["color"][i],
+            )
+
+        flow_defs = [to_flow_def(i) for i in range(len(links["source"]))]
+
+        sys_def = flc.SystemDefinition(
+            fig_size=(10, 7),
+        )
+
+        system = flc.System(
+            definition=sys_def,
+            node_definitions=node_defs,
+            flow_definitions=flow_defs,
+        )
+        fig = system.draw()
+        plt.show()
+
+
+
+    def plot_sankey_plotly(self, nodes: dict, links: dict, colors: dict):
+        fig = go.Figure(
+            go.Sankey(
+                arrangement="snap",
+                link=links,
+                node=nodes,
+            )
+        )
         # Add legend entries
         legend_entries = [
-            (production_color, "Production"),
-            (use_color, "Use"),
-            (eol_color, "End-of-Life"),
-            (recycle_color, "Recycling"),
-            (emission_color, "Losses"),
-            (trade_color, "Trade"),
+            (colors["production_color"], "Production"),
+            (colors["use_color"], "Use"),
+            (colors["eol_color"], "End-of-Life"),
+            (colors["recycle_color"], "Recycling"),
+            (colors["emission_color"], "Losses"),
+            (colors["trade_color"], "Trade"),
         ]
         for color, label in legend_entries:
             fig.add_trace(
@@ -256,7 +342,7 @@ class PlasticsVisualizer(CommonVisualizer):
 
         # Final layout adjustments and display
         fig.update_layout(
-            font_size=18, showlegend=True, plot_bgcolor="rgba(0,0,0,0)", font_color="black"
+            font_size=10, showlegend=True, plot_bgcolor="rgba(0,0,0,0)", font_color="black"
         )
         fig.update_xaxes(visible=False)
         fig.update_yaxes(visible=False)
