@@ -27,23 +27,29 @@ def get_steel_definition(cfg: SteelCfg, historic: bool) -> RemindMFADefinition:
     else:
         processes = [
             "sysenv",
-            "bof_production",
-            "eaf_production",
+            "ironmaking",
+            "steelmaking_bof",
+            "steelmaking_eaf",
             "forming",
-            "ip_market",
+            "steel_market",
             "fabrication",
-            "good_market",
+            "end_use_market",
             "use",
             "obsolete",
-            "eol_market",
-            "recycling",
             "scrap_market",
+            "recycling",
+            "all_scrap",
             "excess_scrap",
             "imports",
             "exports",
             "losses",
             "extraction",
         ]
+    # TODO:
+    # - distinguish between old/prompt/home scrap (new dimension)
+    # - scrap trade:
+    #     - import shares (new vs old) are equal around the world
+    #     - TBD: export - shares equal to production?
 
     # fmt: off
     if historic:
