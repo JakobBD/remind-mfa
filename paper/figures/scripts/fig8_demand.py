@@ -1,11 +1,15 @@
 import csv
+import os
 import pathlib
 
+from dotenv import load_dotenv
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 import _utils
 from _constants import MATERIAL_ORDER, figure_output_path, get_material_config
+
+load_dotenv()
 
 LINE_WIDTH_SCALE = 1.5
 LINE_WIDTH_DEFAULT = 2 * LINE_WIDTH_SCALE
@@ -36,6 +40,20 @@ def _load_country_to_h12_region_map() -> dict:
 COUNTRY_TO_H12_REGION = _load_country_to_h12_region_map()
 
 
+def _configure_browser_path():
+    browser_path = os.getenv("BROWSER_PATH")
+    if not browser_path:
+        return
+    browser_path_obj = pathlib.Path(browser_path)
+    if browser_path_obj.is_dir():
+        chrome_executable = browser_path_obj / "chrome.exe"
+        if chrome_executable.exists():
+            os.environ["BROWSER_PATH"] = str(chrome_executable)
+
+
+_configure_browser_path()
+
+
 def _legend_name(label: str, color: str) -> str:
     return _utils.legend_name(label, color, MAXIMUM_LEGENDTEXT_BRIGHTNESS)
 
@@ -55,8 +73,77 @@ def _aggregate_region_timeseries_with_map(
     return aggregated.groupby(group_cols, as_index=False)[value_col].sum().sort_values(group_cols)
 
 
+def _aggregate_weighted_region_timeseries(
+    values_df,
+    weights_df,
+    value_time_col: str,
+    value_region_col: str,
+    value_col: str,
+    weight_time_col: str,
+    weight_region_col: str,
+    weight_col: str,
+    aggregate_regions: bool,
+    region_map: dict | None = None,
+):
+    weight_value_col = f"{weight_col}_weight"
+    aggregated = values_df.merge(
+        weights_df[
+            [weight_time_col, weight_region_col, weight_col]
+        ].rename(columns={weight_col: weight_value_col}),
+        left_on=[value_time_col, value_region_col],
+        right_on=[weight_time_col, weight_region_col],
+    )
+    if region_map is not None:
+        aggregated[value_region_col] = aggregated[value_region_col].map(
+            lambda region: region_map.get(str(region), str(region))
+        )
+    aggregated[value_region_col] = aggregated[value_region_col].map(
+        lambda region: _utils.map_region(region, aggregate_regions=aggregate_regions)
+    )
+    aggregated["_weighted_value"] = aggregated[value_col] * aggregated[weight_value_col]
+    result = (
+        aggregated.groupby([value_time_col, value_region_col], as_index=False)[
+            ["_weighted_value", weight_value_col]
+        ]
+        .sum()
+        .sort_values([value_time_col, value_region_col])
+    )
+    result[value_col] = result["_weighted_value"] / result[weight_value_col]
+    return result[[value_time_col, value_region_col, value_col]]
+
+
+def _attach_axis_values(
+    df,
+    axis_df,
+    df_time_col: str,
+    df_region_col: str | None,
+    axis_time_col: str,
+    axis_region_col: str | None,
+    axis_value_col: str,
+    output_col: str,
+):
+    axis_values = axis_df.rename(columns={axis_value_col: output_col})
+    left_on = [df_time_col]
+    right_on = [axis_time_col]
+    if df_region_col is not None and axis_region_col is not None:
+        left_on.append(df_region_col)
+        right_on.append(axis_region_col)
+    return df.merge(axis_values, left_on=left_on, right_on=right_on)
+
+
+def _write_png(fig: go.Figure, output_path: pathlib.Path):
+    png_bytes = fig.to_image(
+        format="png",
+        width=fig.layout.width,
+        height=fig.layout.height,
+        scale=3,
+    )
+    output_path.write_bytes(png_bytes)
+
+
 def _load_run_data(config, aggregate_regions: bool, mfa_regions: str):
-    mfa = _utils.load_future_mfa(config.material, region_mapping=mfa_regions)
+    model = _utils.load_model(config.material, region_mapping=mfa_regions)
+    mfa = model.future_mfa
 
     flow = (mfa.flows[config.production_flow_name].sum_to(("t", "r")) / 1e6).to_df().reset_index()
     time_col_flow = _utils.get_column_name(flow, "Time")
@@ -85,6 +172,7 @@ def _load_run_data(config, aggregate_regions: bool, mfa_regions: str):
         stock = stock[config.stock_index]
     stock = stock.sum_to(("t", "r")).to_df().reset_index()
     population = mfa.parameters["population"].sum_to(("t", "r")).to_df().reset_index()
+    gdppc = model.parameters["gdppc"].sum_to(("t", "r")).to_df().reset_index()
 
     time_col_stock = _utils.get_column_name(stock, "Time")
     region_col_stock = _utils.get_column_name(stock, "Region")
@@ -92,6 +180,9 @@ def _load_run_data(config, aggregate_regions: bool, mfa_regions: str):
     time_col_pop = _utils.get_column_name(population, "Time")
     region_col_pop = _utils.get_column_name(population, "Region")
     value_col_pop = _utils.get_column_name(population, "value")
+    time_col_gdppc = _utils.get_column_name(gdppc, "Time")
+    region_col_gdppc = _utils.get_column_name(gdppc, "Region")
+    value_col_gdppc = _utils.get_column_name(gdppc, "value")
 
     if mfa_regions == "iso249":
         stock = _aggregate_region_timeseries_with_map(
@@ -108,6 +199,19 @@ def _load_run_data(config, aggregate_regions: bool, mfa_regions: str):
             value_col_pop,
             COUNTRY_TO_H12_REGION,
         )
+
+    gdppc = _aggregate_weighted_region_timeseries(
+        gdppc,
+        population,
+        time_col_gdppc,
+        region_col_gdppc,
+        value_col_gdppc,
+        time_col_pop,
+        region_col_pop,
+        value_col_pop,
+        aggregate_regions=aggregate_regions,
+        region_map=COUNTRY_TO_H12_REGION if mfa_regions == "iso249" else None,
+    )
 
     stock = _utils.aggregate_region_timeseries(
         stock,
@@ -173,11 +277,94 @@ def _load_run_data(config, aggregate_regions: bool, mfa_regions: str):
         * 1e6
     )
 
+    gdppc_with_population = gdppc.merge(
+        population,
+        left_on=[time_col_gdppc, region_col_gdppc],
+        right_on=[time_col_pop, region_col_pop],
+        suffixes=("_gdppc", "_population"),
+    )
+    gdppc_with_population["_weighted_gdppc"] = (
+        gdppc_with_population[f"{value_col_gdppc}_gdppc"]
+        * gdppc_with_population[f"{value_col_pop}_population"]
+    )
+    global_gdppc = (
+        gdppc_with_population.groupby(time_col_gdppc, as_index=False)[
+            ["_weighted_gdppc", f"{value_col_pop}_population"]
+        ]
+        .sum()
+        .sort_values(time_col_gdppc)
+    )
+    global_gdppc[value_col_gdppc] = (
+        global_gdppc["_weighted_gdppc"] / global_gdppc[f"{value_col_pop}_population"]
+    )
+    global_gdppc = global_gdppc[[time_col_gdppc, value_col_gdppc]]
+
+    stock_pc = _attach_axis_values(
+        stock_pc,
+        gdppc,
+        time_col_stock,
+        region_col_stock,
+        time_col_gdppc,
+        region_col_gdppc,
+        value_col_gdppc,
+        "gdppc",
+    )
+    production_pc = _attach_axis_values(
+        production_pc,
+        gdppc,
+        time_col_flow,
+        region_col_flow,
+        time_col_gdppc,
+        region_col_gdppc,
+        value_col_gdppc,
+        "gdppc",
+    )
+
     flow_total = flow.groupby(time_col_flow, as_index=False)[value_col_flow].sum()
     flow_gt = flow.copy()
     flow_gt[value_col_flow] = flow_gt[value_col_flow] / 1000
     flow_total_gt = flow_total.copy()
     flow_total_gt[value_col_flow] = flow_total_gt[value_col_flow] / 1000
+    flow_gt = _attach_axis_values(
+        flow_gt,
+        gdppc,
+        time_col_flow,
+        region_col_flow,
+        time_col_gdppc,
+        region_col_gdppc,
+        value_col_gdppc,
+        "gdppc",
+    )
+    global_avg = _attach_axis_values(
+        global_avg,
+        global_gdppc,
+        time_col_stock,
+        None,
+        time_col_gdppc,
+        None,
+        value_col_gdppc,
+        "gdppc",
+    )
+    global_production = _attach_axis_values(
+        global_production,
+        global_gdppc,
+        time_col_flow,
+        None,
+        time_col_gdppc,
+        None,
+        value_col_gdppc,
+        "gdppc",
+    )
+    flow_total_gt = _attach_axis_values(
+        flow_total_gt,
+        global_gdppc,
+        time_col_flow,
+        None,
+        time_col_gdppc,
+        None,
+        value_col_gdppc,
+        "gdppc",
+    )
 
     return {
         "config": config,
@@ -193,10 +380,16 @@ def _load_run_data(config, aggregate_regions: bool, mfa_regions: str):
         "time_col_flow": time_col_flow,
         "region_col_flow": region_col_flow,
         "value_col_flow": value_col_flow,
+        "gdppc_col": "gdppc",
     }
 
 
-def main(use_h12: bool = False, mfa_regions: str = "h12", show: bool = True):
+def main(
+    use_h12: bool = False,
+    mfa_regions: str = "h12",
+    show: bool = True,
+    over_gdppc: bool = False,
+):
     aggregate_regions = not use_h12
     run_configs = [get_material_config(material) for material in MATERIAL_ORDER]
 
@@ -209,6 +402,7 @@ def main(use_h12: bool = False, mfa_regions: str = "h12", show: bool = True):
 
     seen_regions = set()
     region_colors = {}
+    x_axis_title = "GDP per capita" if over_gdppc else "Year"
 
     for col, config in enumerate(run_configs, start=1):
         run_data = _load_run_data(
@@ -223,7 +417,9 @@ def main(use_h12: bool = False, mfa_regions: str = "h12", show: bool = True):
         for region_code in stock_regions:
             region_df = run_data["stock_pc"][
                 run_data["stock_pc"][run_data["region_col_stock"]] == region_code
-            ].sort_values(run_data["time_col_stock"])
+            ].sort_values(
+                run_data["gdppc_col"] if over_gdppc else run_data["time_col_stock"]
+            )
             legend_label = _utils.get_region_label(region_code, aggregate_regions=aggregate_regions)
             show_legend = region_code not in seen_regions
             region_color = _get_region_color(
@@ -232,7 +428,7 @@ def main(use_h12: bool = False, mfa_regions: str = "h12", show: bool = True):
 
             fig.add_trace(
                 go.Scatter(
-                    x=region_df[run_data["time_col_stock"]],
+                    x=region_df[run_data["gdppc_col"] if over_gdppc else run_data["time_col_stock"]],
                     y=region_df[run_data["value_col_stock"]],
                     mode="lines",
                     name=_legend_name(legend_label, region_color),
@@ -247,7 +443,9 @@ def main(use_h12: bool = False, mfa_regions: str = "h12", show: bool = True):
 
         fig.add_trace(
             go.Scatter(
-                x=run_data["global_avg"][run_data["time_col_stock"]],
+                x=run_data["global_avg"][
+                    run_data["gdppc_col"] if over_gdppc else run_data["time_col_stock"]
+                ],
                 y=run_data["global_avg"][run_data["value_col_stock"]],
                 mode="lines",
                 name=_legend_name("World", "black"),
@@ -267,7 +465,7 @@ def main(use_h12: bool = False, mfa_regions: str = "h12", show: bool = True):
         for region_code in production_regions:
             region_df = run_data["production_pc"][
                 run_data["production_pc"][run_data["region_col_flow"]] == region_code
-            ].sort_values(run_data["time_col_flow"])
+            ].sort_values(run_data["gdppc_col"] if over_gdppc else run_data["time_col_flow"])
             legend_label = _utils.get_region_label(region_code, aggregate_regions=aggregate_regions)
             show_legend = region_code not in seen_regions
             region_color = _get_region_color(
@@ -276,7 +474,7 @@ def main(use_h12: bool = False, mfa_regions: str = "h12", show: bool = True):
 
             fig.add_trace(
                 go.Scatter(
-                    x=region_df[run_data["time_col_flow"]],
+                    x=region_df[run_data["gdppc_col"] if over_gdppc else run_data["time_col_flow"]],
                     y=region_df[run_data["value_col_flow"]],
                     mode="lines",
                     name=_legend_name(legend_label, region_color),
@@ -291,7 +489,9 @@ def main(use_h12: bool = False, mfa_regions: str = "h12", show: bool = True):
 
         fig.add_trace(
             go.Scatter(
-                x=run_data["global_production"][run_data["time_col_flow"]],
+                x=run_data["global_production"][
+                    run_data["gdppc_col"] if over_gdppc else run_data["time_col_flow"]
+                ],
                 y=run_data["global_production"][run_data["value_col_flow"]],
                 mode="lines",
                 name=_legend_name("World", "black"),
@@ -311,22 +511,22 @@ def main(use_h12: bool = False, mfa_regions: str = "h12", show: bool = True):
         for region_code in flow_regions:
             region_df = run_data["flow_gt"][
                 run_data["flow_gt"][run_data["region_col_flow"]] == region_code
-            ].sort_values(run_data["time_col_flow"])
+            ].sort_values(run_data["gdppc_col"] if over_gdppc else run_data["time_col_flow"])
             legend_label = _utils.get_region_label(region_code, aggregate_regions=aggregate_regions)
             region_color = _get_region_color(
                 region_code, region_colors, aggregate_regions=aggregate_regions
             )
             fig.add_trace(
                 go.Scatter(
-                    x=region_df[run_data["time_col_flow"]],
+                    x=region_df[run_data["gdppc_col"] if over_gdppc else run_data["time_col_flow"]],
                     y=region_df[run_data["value_col_flow"]],
                     mode="lines",
                     name=legend_label,
                     legendgroup=region_code,
                     showlegend=False,
                     line={"color": region_color, "width": LINE_WIDTH_STACK},
-                    stackgroup=f"flow_col_{col}",
-                    fillcolor=region_color,
+                    stackgroup=None if over_gdppc else f"flow_col_{col}",
+                    fillcolor=None if over_gdppc else region_color,
                 ),
                 row=3,
                 col=col,
@@ -334,7 +534,9 @@ def main(use_h12: bool = False, mfa_regions: str = "h12", show: bool = True):
 
         fig.add_trace(
             go.Scatter(
-                x=run_data["flow_total_gt"][run_data["time_col_flow"]],
+                x=run_data["flow_total_gt"][
+                    run_data["gdppc_col"] if over_gdppc else run_data["time_col_flow"]
+                ],
                 y=run_data["flow_total_gt"][run_data["value_col_flow"]],
                 mode="lines",
                 name="World",
@@ -346,22 +548,25 @@ def main(use_h12: bool = False, mfa_regions: str = "h12", show: bool = True):
             col=col,
         )
 
+        if not over_gdppc:
+            for metric_row in range(1, 4):
+                fig.add_vline(
+                    x=config.last_historical_year,
+                    line_dash="dash",
+                    line_color="black",
+                    line_width=LINE_WIDTH_VLINE,
+                    row=metric_row,
+                    col=col,
+                )
         for metric_row in range(1, 4):
-            fig.add_vline(
-                x=config.last_historical_year,
-                line_dash="dash",
-                line_color="black",
-                line_width=LINE_WIDTH_VLINE,
-                row=metric_row,
-                col=col,
-            )
             fig.update_xaxes(
-                title_text="Year",
+                title_text=x_axis_title,
                 title_standoff=4,
-                range=[1950, 2100],
                 row=metric_row,
                 col=col,
             )
+            if not over_gdppc:
+                fig.update_xaxes(range=[1950, 2100], row=metric_row, col=col)
 
     for col, config in enumerate(run_configs, start=1):
         col_domain = fig.get_subplot(1, col).xaxis.domain
@@ -416,18 +621,13 @@ def main(use_h12: bool = False, mfa_regions: str = "h12", show: bool = True):
 
     country_suffix = "_countries" if mfa_regions == "iso249" else ""
     output_path = figure_output_path(
-        f"figure_8_{_utils.region_mode_suffix(use_h12)}{country_suffix}.png"
+        f"figure_8_{_utils.region_mode_suffix(use_h12)}{country_suffix}_gdppc.png"
     )
-    fig.write_image(
-        output_path,
-        width=fig.layout.width,
-        height=fig.layout.height,
-        scale=3,
-    )
+    _write_png(fig, output_path)
     if show:
         fig.show()
     return fig
 
 
 if __name__ == "__main__":
-    main(use_h12=False, mfa_regions="iso249", show=False)
+    main(use_h12=False, mfa_regions="h12", show=False, over_gdppc=True)
