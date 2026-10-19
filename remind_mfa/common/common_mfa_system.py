@@ -2,36 +2,91 @@ import logging
 import sys
 import numpy as np
 import flodym as fd
-from typing import Literal, Optional
+from typing import ClassVar, Literal, Optional
 
 from remind_mfa.common.trade import TradeSet, Trade
 from remind_mfa.common.common_config import CommonCfg
 from remind_mfa.common.helpers import clip_negative_arr
+from remind_mfa.common.data_blending import critically_damped_blend, FLOW_APPROACHING_TIME
+from remind_mfa.common.assumptions_doc import add_assumption_doc
 
 
 class CommonMFASystem(fd.MFASystem):
 
     cfg: CommonCfg
     trade_set: Optional[TradeSet] = None
+    lifetime_n_pts_per_interval: ClassVar[int] = 1
+    """Number of points per time interval of the in-use stock lifetime models."""
 
-    def correct_negative_inflow(self, stock_name: str, warn_small_negative: bool = True):
-        """After a StockDrivenDSM computation, correct any negative inflows.
-        Recomputes the stock as InflowDrivenDSM with the corrected inflow.
-        As some small negative inflows may have their origin in numerical issues,
-        the corresponding warning can be suppressed with warn_small_negative=False.
+    def compute_use_stock(
+        self,
+        stock_projection: fd.FlodymArray,
+        use_stock_name: str = "use",
+    ):
+        """Compute the in-use stock from the stock projection.
+
+        First, a StockDrivenDSM computation on the dims of the stock projection yields the
+        inflow, which is then adjusted (see ``adjust_inflow``). The in-use stock is recomputed as
+        InflowDrivenDSM with the resulting inflow.
+
+        Args:
+            stock_projection (fd.FlodymArray): Projected in-use stock. May lack dims of the
+                in-use stock, if ``adjust_inflow`` adds them.
+            use_stock_name (str): Name of the in-use stock. Defaults to "use".
         """
-        stock = self.stocks[stock_name]
-        if stock.inflow.values.min() >= 0:
-            return
-        corrected_inflow = clip_negative_arr(stock.inflow, warn_small_negative)
-        self.stocks[stock_name] = fd.InflowDrivenDSM(
-            dims=stock.dims,
-            lifetime_model=stock.lifetime_model,
-            name=stock.name,
-            process=stock.process,
+        stock = fd.StockDrivenDSM(
+            dims=stock_projection.dims,
+            stock=stock_projection.to_class(fd.StockArray),
+            lifetime_model=self.cfg.model_switches.lifetime_model,
         )
-        self.stocks[stock_name].inflow[...] = corrected_inflow
-        self.stocks[stock_name].compute()
+        self.set_prms_and_compute(stock)
+
+        inflow = self.adjust_inflow(stock.inflow)
+        self.stocks[use_stock_name].inflow[...] = inflow
+        self.set_prms_and_compute(self.stocks[use_stock_name])
+
+    def set_prms_and_compute(self, stock: fd.Stock):
+        """Set the lifetime model parameters and compute the stock.
+
+        Args:
+            stock (fd.Stock): Stock to set parameters for and compute.
+        """
+        stock.lifetime_model.n_pts_per_interval = self.lifetime_n_pts_per_interval
+        stock.lifetime_model.set_prms(
+            mean=self.parameters["lifetime_mean"],
+            std=self.parameters["lifetime_std"],
+        )
+        stock.compute()
+
+    def adjust_inflow(self, inflow: fd.FlodymArray) -> fd.FlodymArray:
+        """Smooth the transition of the in-use stock inflow from historical to future years
+        with a critically damped blend, and correct any negative inflows to zero.
+
+        Args:
+            inflow (fd.FlodymArray): Inflow resulting from a StockDrivenDSM computation.
+
+        Returns:
+            fd.FlodymArray: Blended and non-negative inflow.
+        """
+        blended_inflow = critically_damped_blend(
+            inflow,
+            n_historical=self.dims["h"].len,
+            n_trend_years=self.parameters["n_trend_years"],
+            approaching_time=FLOW_APPROACHING_TIME,
+        )
+        blended_inflow.name = "In-use stock inflow"
+        add_assumption_doc(
+            type="model assumption",
+            name="Critically damped blend of in-use stock inflow",
+            value=FLOW_APPROACHING_TIME,
+            description=(
+                "The in-use stock inflow resulting from the stock-driven model is blended smoothly "
+                "from historical trends to the future values with a critically damped blend. "
+                "The in-use stock is then recomputed from the blended inflow. "
+                "The value is the approaching time in years."
+            ),
+        )
+        return clip_negative_arr(blended_inflow)
 
     def fill_trade(self):
         """
